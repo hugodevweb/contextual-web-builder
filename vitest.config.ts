@@ -7,6 +7,15 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
+    include: ["src/**/*.{test,spec}.{ts,tsx}"],
+    exclude: [
+      "node_modules",
+      "dist",
+      ".idea",
+      ".git",
+      ".cache",
+      "tests/e2e/**", // Exclude Playwright E2E tests
+    ],
     coverage: {
       provider: "v8",
       reporter: ["html", "lcov", "json-summary", "text", "text-summary"],
@@ -22,6 +31,7 @@ export default defineConfig({
         "**/.next/**",
         "**/playwright-report/**",
         "**/test-results/**",
+        "tests/**", // Exclude all test files from coverage
       ],
       include: ["src/**/*.{ts,tsx}"],
       thresholds: {
