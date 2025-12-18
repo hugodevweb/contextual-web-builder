@@ -1,0 +1,97 @@
+name: Coverage Badge
+
+on:
+  push:
+    branches: [ "main", "master", "Dev-1" ]
+  workflow_dispatch:
+
+jobs:
+  coverage-badge:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: npm ci
+      
+    - name: Install Playwright browsers
+      run: npx playwright install --with-deps chromium
+      
+    - name: Build Vite application
+      run: npm run build
+      
+    - name: Start Vite preview server
+      run: |
+        npm run preview &
+        echo $! > .preview-pid
+      env:
+        NODE_ENV: production
+        
+    - name: Wait for application to be ready
+      run: npx wait-on http://localhost:4173 -t 60000 -v
+      
+    - name: Run tests with coverage
+      run: npm run test:coverage
+      env:
+        HEADLESS: true
+        CI: true
+        
+    - name: Stop preview server
+      if: always()
+      run: |
+        if [ -f .preview-pid ]; then
+          kill $(cat .preview-pid) || true
+        fi
+        
+    - name: Extract coverage percentage
+      id: coverage
+      run: |
+        if [ -f coverage/coverage-summary.json ]; then
+          COVERAGE=$(node -e "console.log(require('./coverage/coverage-summary.json').total.lines.pct.toFixed(2))")
+          echo "coverage=$COVERAGE" >> $GITHUB_OUTPUT
+          echo "Coverage: $COVERAGE%"
+        else
+          echo "coverage=0" >> $GITHUB_OUTPUT
+          echo "Coverage: 0% (no coverage data found)"
+        fi
+        
+    - name: Create coverage badge
+      if: secrets.GIST_SECRET != ''
+      uses: schneegans/dynamic-badges-action@v1.7.0
+      with:
+        auth: ${{ secrets.GIST_SECRET }}
+        gistID: 42917a0d58b49e567c96027d931cd95f  # Replace with your Gist ID
+        filename: coverage-badge.json
+        label: Coverage
+        message: ${{ steps.coverage.outputs.coverage }}%
+        valColorRange: ${{ steps.coverage.outputs.coverage }}
+        maxColorRange: 100
+        minColorRange: 0
+        
+    - name: Upload to Codecov (Optional)
+      if: env.CODECOV_TOKEN != ''
+      uses: codecov/codecov-action@v4
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+      env:
+        CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        
+    - name: Upload coverage reports to GitHub
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-badge-report
+        path: coverage/
+        retention-days: 90
+
